@@ -1,6 +1,6 @@
 import React from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import Header from './components/Header';
 import ProjectChatProvider from './components/ProjectChatProvider';
 import Dashboard from './pages/Dashboard';
@@ -8,12 +8,12 @@ import Ideation from './pages/Ideation';
 import Planning from './pages/Planning';
 import Shooting from './pages/Shooting';
 import ProjectView from './pages/ProjectView';
-import Auth from './components/Auth';
+import JoinProject from './pages/JoinProject';
 import { ProjectProvider, useProject } from './context/ProjectContext';
 import './App.css';
 
 function AppContent() {
-  const { user, loading } = useProject();
+  const { loading } = useProject();
 
   if (loading) {
     return (
@@ -24,10 +24,6 @@ function AppContent() {
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return <Auth />;
   }
 
   return (
@@ -42,10 +38,9 @@ function AppContent() {
             <Route path="/planning/:projectId" element={<Planning />} />
             <Route path="/shooting/:projectId" element={<Shooting />} />
             <Route path="/project/:projectId" element={<ProjectView />} />
+            <Route path="/join/:projectId" element={<JoinProject />} />
           </Routes>
         </AnimatePresence>
-        
-        {/* Global Floating Chat */}
         <ProjectChatProvider />
       </div>
     </Router>

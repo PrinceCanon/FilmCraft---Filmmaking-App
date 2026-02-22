@@ -1,31 +1,32 @@
-import React, { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React from 'react';
+import { useLocation, useParams } from 'react-router-dom';
 import FloatingProjectChat from './FloatingProjectChat';
 
 const ProjectChatProvider = () => {
   const location = useLocation();
   
-  // Extract project ID from current route
-  const getProjectIdFromPath = () => {
+  // Robust project ID extraction from URL
+  const getProjectId = () => {
     const path = location.pathname;
-    const projectRoutes = ['/planning/', '/shooting/', '/project/', '/ideation/'];
+    const parts = path.split('/');
     
-    for (const route of projectRoutes) {
-      if (path.includes(route)) {
-        const segments = path.split('/');
-        const routeIndex = segments.findIndex(segment => route.includes(`/${segment}/`));
-        if (routeIndex >= 0 && segments[routeIndex + 1]) {
-          return segments[routeIndex + 1];
-        }
+    // Check various common routes containing projectId
+    const routesWithId = ['project', 'ideation', 'planning', 'shooting'];
+    
+    for (const route of routesWithId) {
+      const index = parts.indexOf(route);
+      if (index !== -1 && parts[index + 1]) {
+        // Return the next part which should be the UUID
+        return parts[index + 1];
       }
     }
     return null;
   };
 
-  const projectId = getProjectIdFromPath();
+  const projectId = getProjectId();
 
-  // Only render chat if we're on a project page
-  if (!projectId) {
+  // Don't show on dashboard or join page
+  if (!projectId || location.pathname === '/' || location.pathname.startsWith('/join')) {
     return null;
   }
 

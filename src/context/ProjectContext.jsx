@@ -1,177 +1,65 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import supabase from '../lib/supabase';
+import supabase from '../supabase/supabase';
 
 const ProjectContext = createContext();
 
 export const useProject = () => {
   const context = useContext(ProjectContext);
-  if (!context) {
-    throw new Error('useProject must be used within a ProjectProvider');
-  }
+  if (!context) throw new Error('useProject must be used within a ProjectProvider');
   return context;
 };
 
 export const ProjectProvider = ({ children }) => {
   const [projects, setProjects] = useState([]);
-  const [currentProject, setCurrentProject] = useState(null);
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const user = { id: 'guest-user', email: 'guest@filmcraft.io' };
 
   useEffect(() => {
-    // Get initial user
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      if (user) {
-        loadProjects();
-      }
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProjects();
-      } else {
-        setProjects([]);
-        setCurrentProject(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    loadProjects();
   }, []);
 
   const loadProjects = async () => {
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('projects_fc2024')
         .select('*')
         .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading projects:', error);
-        throw error;
-      }
-
+      if (error) throw error;
       setProjects(data || []);
     } catch (error) {
       console.error('Error loading projects:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const createProject = async (projectData) => {
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
-
     try {
-      console.log('Creating project with user:', user.id);
-      console.log('Project data:', projectData);
-
-      // Validate required fields
-      if (!projectData.title?.trim()) {
-        throw new Error('Project title is required');
-      }
-      if (!projectData.type?.trim()) {
-        throw new Error('Project type is required');
-      }
-      if (!projectData.concept?.trim()) {
-        throw new Error('Project concept is required');
-      }
-
-      // Clean and prepare the data with proper defaults
-      const cleanProjectData = {
-        title: String(projectData.title).trim(),
-        concept: String(projectData.concept).trim(),
-        type: String(projectData.type).trim(),
-        target_audience: String(projectData.target_audience || '').trim(),
-        duration: String(projectData.duration || '').trim(),
-        key_message: String(projectData.key_message || '').trim(),
-        tone: String(projectData.tone || '').trim(),
-        inspiration: String(projectData.inspiration || '').trim(),
-        unique_angle: String(projectData.unique_angle || '').trim(),
-        phase: 'planning',
-        story_structure: [],
-        locations: [],
-        timeline: [],
-        resources: {},
-        completed_shots: [],
-        script: '', // Initialize script as empty string
-        owner_id: user.id,
-      };
-
-      console.log('Inserting clean project data:', cleanProjectData);
-
-      // Insert the project
       const { data, error } = await supabase
         .from('projects_fc2024')
-        .insert([cleanProjectData])
+        .insert([{ ...projectData, phase: 'planning', owner_id: user.id }])
         .select()
         .single();
-
-      if (error) {
-        console.error('Supabase insertion error:', error);
-        throw new Error(`Database error: ${error.message}`);
-      }
-
-      if (!data) {
-        throw new Error('No data returned from database');
-      }
-
-      console.log('Project created successfully:', data);
-
-      // Update local state
-      setProjects((prev) => [data, ...prev]);
-      setCurrentProject(data);
-
+      if (error) throw error;
+      setProjects(prev => [data, ...prev]);
       return data;
     } catch (error) {
-      console.error('Error in createProject:', error);
+      console.error('Error creating project:', error);
       throw error;
     }
   };
 
   const updateProject = async (projectId, updates) => {
     try {
-      console.log('Updating project:', projectId, updates);
-
-      // Ensure we have valid data for script updates
-      if (updates.script !== undefined) {
-        updates.script = String(updates.script || '');
-      }
-
-      // Add updated timestamp
-      updates.updated_at = new Date().toISOString();
-
       const { data, error } = await supabase
         .from('projects_fc2024')
-        .update(updates)
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', projectId)
         .select()
         .single();
-
-      if (error) {
-        console.error('Update error:', error);
-        throw new Error(`Failed to update project: ${error.message}`);
-      }
-
-      if (!data) {
-        throw new Error('No data returned from update operation');
-      }
-
-      console.log('Project updated successfully:', data);
-
-      // Update local state
-      setProjects((prev) =>
-        prev.map((project) => (project.id === projectId ? data : project))
-      );
-
-      if (currentProject && currentProject.id === projectId) {
-        setCurrentProject(data);
-      }
-
+      if (error) throw error;
+      setProjects(prev => prev.map(p => p.id === projectId ? data : p));
       return data;
     } catch (error) {
       console.error('Error updating project:', error);
@@ -185,107 +73,38 @@ export const ProjectProvider = ({ children }) => {
         .from('projects_fc2024')
         .delete()
         .eq('id', projectId);
-
       if (error) throw error;
-
-      setProjects((prev) => prev.filter((project) => project.id !== projectId));
-      if (currentProject && currentProject.id === projectId) {
-        setCurrentProject(null);
-      }
+      setProjects(prev => prev.filter(p => p.id !== projectId));
     } catch (error) {
       console.error('Error deleting project:', error);
       throw error;
     }
   };
 
-  const getProject = (projectId) => {
-    return projects.find((project) => project.id === projectId);
-  };
+  const getProject = (projectId) => projects.find(p => p.id === projectId);
 
-  const signIn = async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      return { data, error };
-    } catch (error) {
-      return { data: null, error };
-    }
-  };
-
-  const signUp = async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-      return { data, error };
-    } catch (error) {
-      return { data: null, error };
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (!error) {
-        setUser(null);
-        setProjects([]);
-        setCurrentProject(null);
-      }
-      return { error };
-    } catch (error) {
-      return { error };
-    }
-  };
-
-  // Test database connection
-  const testConnection = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('projects_fc2024')
-        .select('count(*)')
-        .limit(1);
-
-      if (error) {
-        console.error('Database connection test failed:', error);
-        return false;
-      }
-
-      console.log('Database connection test successful');
-      return true;
-    } catch (error) {
-      console.error('Database connection test error:', error);
-      return false;
-    }
-  };
-
-  // Test connection on load
-  useEffect(() => {
-    if (user) {
-      testConnection();
-    }
-  }, [user]);
-
-  const value = {
-    projects,
-    currentProject,
-    user,
-    loading,
-    setCurrentProject,
-    createProject,
-    updateProject,
-    deleteProject,
-    getProject,
-    signIn,
-    signUp,
-    signOut,
-    loadProjects,
-    testConnection,
+  const checkAccess = (project) => {
+    if (!project) return false;
+    if (!project.is_private) return true;
+    
+    // Check if access was granted via password in this session
+    const accessGranted = localStorage.getItem(`access_${project.id}`);
+    return accessGranted === 'granted';
   };
 
   return (
-    <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>
+    <ProjectContext.Provider value={{ 
+      projects, 
+      user, 
+      loading, 
+      createProject, 
+      updateProject, 
+      deleteProject, 
+      getProject, 
+      loadProjects,
+      checkAccess
+    }}>
+      {children}
+    </ProjectContext.Provider>
   );
 };
