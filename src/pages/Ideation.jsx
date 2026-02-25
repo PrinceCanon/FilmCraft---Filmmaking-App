@@ -1,190 +1,141 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useProject } from '../context/ProjectContext';
 import IdeationPrompts from '../components/IdeationPrompts';
+import StoryStructureBuilder from '../components/StoryStructureBuilder';
 import ProjectBreadcrumb from '../components/ProjectBreadcrumb';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-// Added FiUsers to the destructured icons
-const { FiArrowRight, FiLightbulb, FiTarget, FiAlertCircle, FiChevronLeft, FiUsers } = FiIcons;
+const { FiArrowRight, FiArrowLeft, FiZap, FiLayout, FiCheckCircle, FiChevronRight, FiChevronLeft } = FiIcons;
 
 const Ideation = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { createProject, updateProject, getProject } = useProject();
-  const [currentStep, setCurrentStep] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
+  const { getProject, updateProject, checkAccess } = useProject();
   const [project, setProject] = useState(null);
-  const [projectData, setProjectData] = useState({
-    title: '',
-    type: 'Vlog',
-    target_audience: '',
-    duration: '1-3 minutes',
-    concept: '',
-    key_message: '',
-    tone: 'Casual & Friendly',
-    inspiration: '',
-    unique_angle: ''
-  });
-
-  const steps = [
-    { id: 'basics', title: 'Project Basics', icon: FiTarget, description: 'Define your project fundamentals' },
-    { id: 'concept', title: 'Concept Development', icon: FiLightbulb, description: 'Develop your creative concept' },
-    { id: 'audience', title: 'Audience & Tone', icon: FiUsers, description: 'Define your target audience and tone' }
-  ];
+  const [activeStep, setActiveStep] = useState(0); // 0: Creative, 1: Storyboard
+  const [creativeSubStep, setCreativeSubStep] = useState(0); // 0, 1, 2 for IdeationPrompts
 
   useEffect(() => {
-    if (projectId) {
-      const existingProject = getProject(projectId);
-      if (existingProject) {
-        setProject(existingProject);
-        setIsEditing(true);
-        setProjectData({
-          title: existingProject.title || '',
-          type: existingProject.type || 'Vlog',
-          target_audience: existingProject.target_audience || '',
-          duration: existingProject.duration || '1-3 minutes',
-          concept: existingProject.concept || '',
-          key_message: existingProject.key_message || '',
-          tone: existingProject.tone || 'Casual & Friendly',
-          inspiration: existingProject.inspiration || '',
-          unique_angle: existingProject.unique_angle || ''
-        });
+    const data = getProject(projectId);
+    if (data) {
+      if (!checkAccess(data)) {
+        navigate(`/join/${projectId}`);
+        return;
       }
+      setProject(data);
+    } else {
+      const timer = setTimeout(() => {
+        const retryData = getProject(projectId);
+        if (!retryData) navigate(`/join/${projectId}`);
+        else setProject(retryData);
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  }, [projectId, getProject]);
+  }, [projectId, getProject, checkAccess, navigate]);
 
   const handleDataUpdate = (data) => {
-    setProjectData(prev => ({ ...prev, ...data }));
-    setError('');
+    const updatedProject = { ...project, ...data };
+    setProject(updatedProject);
+    updateProject(projectId, data);
   };
 
-  const handleNext = () => {
-    if (currentStep < 2) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    } else {
-      navigate('/');
-    }
-  };
-
-  const handleComplete = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // Use a default title if none provided to satisfy DB constraints
-      const finalData = {
-        ...projectData,
-        title: projectData.title?.trim() || 'Untitled Project ' + new Date().toLocaleDateString()
-      };
-
-      if (isEditing) {
-        await updateProject(projectId, finalData);
-        navigate(`/project/${projectId}`);
-      } else {
-        const newProject = await createProject(finalData);
-        navigate(`/planning/${newProject.id}`);
-      }
-    } catch (err) {
-      console.error('Ideation error:', err);
-      setError('Connection failed. Your progress might not have saved.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!project) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
+    </div>
+  );
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {project && <ProjectBreadcrumb project={project} currentPhase="ideation" className="mb-8" />}
-        
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-500/10 rounded-full border border-blue-500/20 mb-4">
-            <SafeIcon icon={FiLightbulb} className="text-blue-400" />
-            <span className="text-blue-400 font-bold text-sm tracking-wide uppercase">Ideation Phase</span>
-          </div>
-          <h1 className="text-4xl font-bold text-white mb-2">
-            {isEditing ? 'Refine Your Direction' : 'Start Your Journey'}
-          </h1>
-          <p className="text-gray-400">Step {currentStep + 1} of 3: You can skip any field and return later.</p>
+    <div className="min-h-screen bg-slate-950">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-12">
+          <ProjectBreadcrumb project={project} currentPhase="ideation" className="mb-4" />
+          <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter">Creative Ideation</h1>
         </div>
 
-        {error && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }} 
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center space-x-3 text-red-400"
+        <div className="flex space-x-2 mb-12 bg-white/5 p-2 rounded-[2rem] border border-white/10 max-w-lg">
+          <button 
+            onClick={() => setActiveStep(0)}
+            className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-3xl font-bold transition-all ${activeStep === 0 ? 'bg-purple-500 text-white shadow-lg' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
           >
-            <SafeIcon icon={FiAlertCircle} />
-            <p className="font-medium">{error}</p>
-          </motion.div>
-        )}
+            <SafeIcon icon={FiZap} />
+            <span>Creative Concept</span>
+          </button>
+          <button 
+            onClick={() => setActiveStep(1)}
+            className={`flex-1 flex items-center justify-center space-x-2 py-4 rounded-3xl font-bold transition-all ${activeStep === 1 ? 'bg-purple-500 text-white shadow-lg' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+          >
+            <SafeIcon icon={FiLayout} />
+            <span>Story Structure</span>
+          </button>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-          <div className="lg:col-span-2">
-            <motion.div 
-              key={currentStep}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-8 shadow-2xl"
-            >
-              <IdeationPrompts step={currentStep} data={projectData} onDataUpdate={handleDataUpdate} />
-            </motion.div>
-          </div>
+        <motion.div 
+          key={activeStep + (activeStep === 0 ? creativeSubStep : 0)}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-12"
+        >
+          {activeStep === 0 ? (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between px-2">
+                <div className="flex space-x-2">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className={`h-1.5 w-12 rounded-full transition-all ${creativeSubStep >= i ? 'bg-purple-500' : 'bg-white/10'}`} />
+                  ))}
+                </div>
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                  Step {creativeSubStep + 1} of 3
+                </span>
+              </div>
+              
+              <IdeationPrompts 
+                step={creativeSubStep} 
+                data={project} 
+                onDataUpdate={handleDataUpdate} 
+              />
 
-          <div className="space-y-6">
-            <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-6 sticky top-24">
-              <h3 className="text-lg font-bold text-white mb-6 border-b border-white/5 pb-4">Real-time Preview</h3>
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Title</label>
-                  <p className="text-white font-medium">{projectData.title || 'Untitled Project'}</p>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Concept Status</label>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${projectData.concept ? 'bg-green-500' : 'bg-gray-600'}`} />
-                    <p className="text-xs text-gray-400">{projectData.concept ? 'Developing' : 'Empty'}</p>
-                  </div>
-                </div>
+              <div className="flex justify-between pt-4">
+                <button 
+                  onClick={() => setCreativeSubStep(Math.max(0, creativeSubStep - 1))}
+                  disabled={creativeSubStep === 0}
+                  className="flex items-center space-x-2 px-6 py-3 rounded-xl font-bold text-gray-400 hover:text-white disabled:opacity-0 transition-all"
+                >
+                  <SafeIcon icon={FiChevronLeft} />
+                  <span>Previous</span>
+                </button>
+                <button 
+                  onClick={() => creativeSubStep < 2 ? setCreativeSubStep(creativeSubStep + 1) : setActiveStep(1)}
+                  className="flex items-center space-x-2 px-8 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold border border-white/10 transition-all"
+                >
+                  <span>{creativeSubStep < 2 ? 'Continue' : 'Next: Story Structure'}</span>
+                  <SafeIcon icon={FiChevronRight} />
+                </button>
               </div>
             </div>
-          </div>
-        </div>
+          ) : (
+            <StoryStructureBuilder project={project} onDataUpdate={handleDataUpdate} />
+          )}
+        </motion.div>
 
         <div className="flex items-center justify-between pt-8 border-t border-white/5">
           <button 
-            onClick={handleBack}
-            className="flex items-center space-x-2 px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all"
+            onClick={() => activeStep === 1 ? setActiveStep(0) : navigate(`/project/${projectId}`)}
+            className="flex items-center space-x-2 px-10 py-5 bg-white/5 hover:bg-white/10 text-white rounded-[1.5rem] font-bold border border-white/10 transition-all"
           >
-            <SafeIcon icon={FiChevronLeft} />
-            <span>{currentStep === 0 ? 'Dashboard' : 'Back'}</span>
+            <SafeIcon icon={FiArrowLeft} />
+            <span>{activeStep === 1 ? 'Back to Concept' : 'Project Hub'}</span>
           </button>
           
           <button 
-            onClick={handleNext}
-            disabled={loading}
-            className="flex items-center space-x-3 px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl font-bold transition-all shadow-xl shadow-blue-500/20"
+            onClick={() => activeStep === 0 ? setActiveStep(1) : navigate(`/planning/${projectId}`)}
+            className="flex items-center space-x-2 px-12 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-[1.5rem] font-extrabold transition-all shadow-2xl shadow-purple-500/20 active:scale-95"
           >
-            {loading ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white" />
-            ) : (
-              <>
-                <span>{currentStep === 2 ? (isEditing ? 'Finish Editing' : 'Start Planning') : 'Next Step'}</span>
-                <SafeIcon icon={FiArrowRight} />
-              </>
-            )}
+            <span>{activeStep === 0 ? 'Next: Storyboard' : 'Start Planning'}</span>
+            <SafeIcon icon={FiArrowRight} />
           </button>
         </div>
       </div>

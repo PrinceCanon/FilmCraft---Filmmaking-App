@@ -8,19 +8,33 @@ import ProjectBreadcrumb from '../components/ProjectBreadcrumb';
 import supabase from '../lib/supabase';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiCamera, FiCheck, FiVideo, FiSun, FiMic, FiMapPin, FiPackage, FiUsers, FiMessageCircle, FiChevronDown, FiChevronRight, FiArrowLeft, FiCheckCircle } = FiIcons;
+const { 
+  FiCamera, FiCheck, FiVideo, FiSun, FiMapPin, FiPackage, 
+  FiUsers, FiMessageCircle, FiChevronDown, FiChevronRight, 
+  FiArrowLeft, FiCheckCircle, FiClock, FiCalendar, FiAlertCircle,
+  FiClipboard, FiTool, FiFilm, FiX
+} = FiIcons;
 
 const Shooting = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const { getProject, updateProject, checkAccess } = useProject();
+  const { getProject, checkAccess } = useProject();
   const [project, setProject] = useState(null);
   const [shots, setShots] = useState([]);
   const [scenes, setScenes] = useState([]);
-  const [expandedScenes, setExpandedScenes] = useState(new Set());
+  const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false);
-  const [completing, setCompleting] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [callSheet, setCallSheet] = useState({
+    crew_call: '07:00',
+    first_shot: '08:00',
+    lunch_break: '13:00',
+    wrap_time: '18:00',
+    equipment: [],
+    crew_needed: [],
+    notes: ''
+  });
 
   useEffect(() => {
     const projectData = getProject(projectId);
@@ -30,20 +44,22 @@ const Shooting = () => {
         return;
       }
       setProject(projectData);
-      loadProductionData();
+      loadShootingData();
     } else {
       navigate('/');
     }
-  }, [projectId, getProject, checkAccess, navigate]);
+  }, [projectId]);
 
-  const loadProductionData = async () => {
+  const loadShootingData = async () => {
     setLoading(true);
-    const [shotsRes, scenesRes] = await Promise.all([
-      supabase.from('shot_lists_fc2024').select('*').eq('project_id', projectId).order('order_index'),
-      supabase.from('scenes_fc2024').select('*').eq('project_id', projectId).order('scene_number')
+    const [shotsRes, scenesRes, scheduleRes] = await Promise.all([
+      supabase.from('shot_lists_fc2024').select('*').eq('project_id', projectId).order('scene_number').order('order_index'),
+      supabase.from('scenes_fc2024').select('*').eq('project_id', projectId).order('scene_number'),
+      supabase.from('production_schedule_fc2024').select('*').eq('project_id', projectId).order('date').order('start_time')
     ]);
     setShots(shotsRes.data || []);
     setScenes(scenesRes.data || []);
+    setSchedule(scheduleRes.data || []);
     setLoading(false);
   };
 
@@ -53,128 +69,332 @@ const Shooting = () => {
     await supabase.from('shot_lists_fc2024').update({ status: newStatus }).eq('id', shotId);
   };
 
-  const handleCompleteProject = async () => {
-    setCompleting(true);
-    try {
-      await updateProject(projectId, { phase: 'completed', completed_at: new Date().toISOString() });
-      navigate('/');
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setCompleting(false);
-    }
+  const getTodaySchedule = () => {
+    return schedule.filter(item => item.date === selectedDate && item.type === 'shoot');
   };
 
-  if (!project || loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading Production...</div>;
+  const getShotsForToday = () => {
+    const todaySchedule = getTodaySchedule();
+    if (todaySchedule.length === 0) return [];
+    
+    // Get scene numbers from today's schedule notes/title
+    const todayScenes = scenes.filter(scene => 
+      todaySchedule.some(item => 
+        item.title.toLowerCase().includes(scene.title.toLowerCase()) ||
+        item.notes?.toLowerCase().includes(scene.title.toLowerCase())
+      )
+    );
+    
+    const sceneNumbers = todayScenes.map(s => s.scene_number);
+    return shots.filter(shot => sceneNumbers.includes(shot.scene_number));
+  };
 
-  const totalCompleted = shots.filter(s => s.status === 'completed').length;
-  const progress = shots.length > 0 ? (totalCompleted / shots.length) * 100 : 0;
+  const getEquipmentChecklist = () => {
+    const todayShots = getShotsForToday();
+    const equipment = new Set();
+    
+    todayShots.forEach(shot => {
+      if (shot.lens) equipment.add(`Lens: ${shot.lens}`);
+      if (shot.shot_type?.includes('Drone')) equipment.add('Drone + Controller');
+      if (shot.shot_type?.includes('POV')) equipment.add('POV Rig / GoPro');
+      equipment.add('Camera Body');
+      equipment.add('Tripod / Stabilizer');
+      equipment.add('Audio Kit');
+      equipment.add('Lighting Kit');
+    });
+    
+    return Array.from(equipment);
+  };
+
+  if (!project || loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white font-bold">Loading Shoot Day...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const todaySchedule = getTodaySchedule();
+  const todayShots = getShotsForToday();
+  const completedToday = todayShots.filter(s => s.status === 'completed').length;
+  const progressToday = todayShots.length > 0 ? (completedToday / todayShots.length) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-slate-900 pb-20">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <ProjectBreadcrumb project={project} currentPhase="shooting" className="mb-8" />
         
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-8 mb-12">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">{project.title}</h1>
-              <p className="text-gray-400">Production Dashboard • {shots.length} Shots total</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button onClick={() => setShowChat(true)} className="p-4 bg-purple-500/20 text-purple-400 rounded-2xl border border-purple-500/30">
-                <SafeIcon icon={FiMessageCircle} className="text-xl" />
-              </button>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-red-500">{progress.toFixed(0)}%</div>
-                <div className="text-xs text-gray-500 uppercase font-bold tracking-widest">Complete</div>
+        {/* Shoot Day Header */}
+        <div className="bg-gradient-to-br from-red-500/10 via-orange-500/10 to-yellow-500/10 border border-red-500/20 rounded-[2.5rem] p-10 mb-8 backdrop-blur-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-red-500/20 blur-[150px] rounded-full -mr-48 -mt-48" />
+          
+          <div className="relative z-10">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-6">
+              <div>
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="p-3 bg-red-500/30 rounded-2xl border border-red-500/40">
+                    <SafeIcon icon={FiVideo} className="text-red-400 text-2xl" />
+                  </div>
+                  <div>
+                    <h1 className="text-4xl lg:text-5xl font-black text-white tracking-tight">Shoot Day</h1>
+                    <p className="text-red-300 font-bold text-sm mt-1">Production Dashboard</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-4">
+                <input 
+                  type="date" 
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="px-6 py-4 bg-white/10 border border-white/20 rounded-2xl text-white font-bold text-lg backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                <button 
+                  onClick={() => setShowChat(true)} 
+                  className="p-4 bg-purple-500/20 text-purple-400 rounded-2xl border border-purple-500/30 hover:bg-purple-500/30 transition-all"
+                >
+                  <SafeIcon icon={FiMessageCircle} className="text-xl" />
+                </button>
               </div>
             </div>
-          </div>
-          <div className="w-full bg-white/5 rounded-full h-3">
-            <motion.div initial={{ width: 0 }} animate={{ width: `${progress}%` }} className="bg-gradient-to-r from-red-500 to-orange-500 h-full rounded-full" />
+
+            {/* Today's Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Shots Today</span>
+                  <SafeIcon icon={FiCamera} className="text-red-400" />
+                </div>
+                <div className="text-3xl font-black text-white">{todayShots.length}</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Completed</span>
+                  <SafeIcon icon={FiCheckCircle} className="text-green-400" />
+                </div>
+                <div className="text-3xl font-black text-white">{completedToday}</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progress</span>
+                  <SafeIcon icon={FiFilm} className="text-blue-400" />
+                </div>
+                <div className="text-3xl font-black text-white">{progressToday.toFixed(0)}%</div>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Locations</span>
+                  <SafeIcon icon={FiMapPin} className="text-purple-400" />
+                </div>
+                <div className="text-3xl font-black text-white">{new Set(todaySchedule.map(s => s.location)).size}</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          {scenes.map(scene => (
-            <div key={scene.scene_number} className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden">
-              <div 
-                className="p-6 cursor-pointer flex items-center justify-between hover:bg-white/5 transition-colors"
-                onClick={() => setExpandedScenes(prev => {
-                  const next = new Set(prev);
-                  if (next.has(scene.scene_number)) next.delete(scene.scene_number);
-                  else next.add(scene.scene_number);
-                  return next;
-                })}
-              >
-                <div className="flex items-center space-x-4">
-                  <SafeIcon icon={expandedScenes.has(scene.scene_number) ? FiChevronDown : FiChevronRight} className="text-red-400" />
-                  <h3 className="text-xl font-bold text-white">{scene.title}</h3>
+        {todaySchedule.length === 0 ? (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-3xl p-12 text-center">
+            <SafeIcon icon={FiAlertCircle} className="text-6xl text-yellow-400 mx-auto mb-4" />
+            <h3 className="text-2xl font-black text-white mb-2">No Shoot Scheduled</h3>
+            <p className="text-gray-400 mb-6">There are no shooting activities scheduled for {new Date(selectedDate).toLocaleDateString()}.</p>
+            <button 
+              onClick={() => navigate(`/planning/${projectId}`)}
+              className="px-8 py-4 bg-yellow-500 hover:bg-yellow-400 text-black font-black rounded-2xl transition-all"
+            >
+              Go to Planning to Schedule
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            {/* Left Column: Call Sheet & Equipment */}
+            <div className="space-y-8">
+              {/* Call Sheet */}
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
+                <div className="flex items-center space-x-3 mb-6">
+                  <SafeIcon icon={FiClipboard} className="text-2xl text-blue-400" />
+                  <h3 className="text-2xl font-black text-white">Call Sheet</h3>
                 </div>
-                <div className="text-sm font-bold text-gray-400">
-                  {shots.filter(s => s.scene_number === scene.scene_number && s.status === 'completed').length} / {shots.filter(s => s.scene_number === scene.scene_number).length}
+                <div className="space-y-4">
+                  {todaySchedule.map((item, i) => (
+                    <div key={i} className="bg-white/5 border border-white/5 rounded-2xl p-4">
+                      <h4 className="font-bold text-white mb-2">{item.title}</h4>
+                      <div className="space-y-2 text-sm text-gray-400">
+                        <div className="flex items-center space-x-2">
+                          <SafeIcon icon={FiClock} className="text-xs" />
+                          <span>{item.start_time} - {item.end_time}</span>
+                        </div>
+                        {item.location && (
+                          <div className="flex items-center space-x-2">
+                            <SafeIcon icon={FiMapPin} className="text-xs" />
+                            <span>{item.location}</span>
+                          </div>
+                        )}
+                        {item.notes && (
+                          <p className="text-xs italic mt-2 border-l-2 border-white/10 pl-2">{item.notes}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <AnimatePresence>
-                {expandedScenes.has(scene.scene_number) && (
-                  <motion.div 
-                    initial={{ height: 0 }} 
-                    animate={{ height: 'auto' }} 
-                    exit={{ height: 0 }} 
-                    className="overflow-hidden border-t border-white/5"
-                  >
-                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {shots.filter(s => s.scene_number === scene.scene_number).map(shot => (
-                        <div key={shot.id} className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${shot.status === 'completed' ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10'}`}>
-                          <div className="flex items-center space-x-4">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${shot.status === 'completed' ? 'bg-green-500 text-white' : 'bg-white/10 text-gray-400'}`}>
-                              {shot.order_index}
+              {/* Equipment Checklist */}
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
+                <div className="flex items-center space-x-3 mb-6">
+                  <SafeIcon icon={FiPackage} className="text-2xl text-green-400" />
+                  <h3 className="text-2xl font-black text-white">Equipment</h3>
+                </div>
+                <div className="space-y-3">
+                  {getEquipmentChecklist().map((item, i) => (
+                    <label key={i} className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer transition-all">
+                      <input type="checkbox" className="w-5 h-5 rounded border-white/20 bg-white/10" />
+                      <span className="text-sm text-gray-300">{item}</span>
+                    </label>
+                  ))}
+                  <div className="pt-4 border-t border-white/10">
+                    <label className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer transition-all">
+                      <input type="checkbox" className="w-5 h-5 rounded border-white/20 bg-white/10" />
+                      <span className="text-sm text-gray-300">Batteries Charged</span>
+                    </label>
+                    <label className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer transition-all">
+                      <input type="checkbox" className="w-5 h-5 rounded border-white/20 bg-white/10" />
+                      <span className="text-sm text-gray-300">Memory Cards Formatted</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Shot List */}
+            <div className="xl:col-span-2">
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center space-x-3">
+                    <SafeIcon icon={FiFilm} className="text-2xl text-purple-400" />
+                    <h3 className="text-2xl font-black text-white">Shot List</h3>
+                  </div>
+                  <div className="px-6 py-3 bg-purple-500/20 border border-purple-500/30 rounded-2xl">
+                    <span className="text-sm font-black text-purple-300">{completedToday} / {todayShots.length} Complete</span>
+                  </div>
+                </div>
+
+                {todayShots.length === 0 ? (
+                  <div className="text-center py-16 opacity-50">
+                    <SafeIcon icon={FiCamera} className="text-6xl text-gray-700 mx-auto mb-4" />
+                    <p className="text-gray-500 font-bold">No shots planned for this date</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {todayShots.map((shot, idx) => (
+                      <motion.div 
+                        key={shot.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className={`group relative bg-white/5 border rounded-2xl overflow-hidden transition-all ${
+                          shot.status === 'completed' 
+                            ? 'border-green-500/50 opacity-60' 
+                            : 'border-white/10 hover:border-purple-500/30'
+                        }`}
+                      >
+                        <div className="p-6">
+                          <div className="flex items-start gap-6">
+                            {/* Shot Number */}
+                            <div className={`flex-shrink-0 w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black ${
+                              shot.status === 'completed' 
+                                ? 'bg-green-500/20 text-green-400 border-2 border-green-500/50' 
+                                : 'bg-purple-500/20 text-purple-400 border-2 border-purple-500/30'
+                            }`}>
+                              {shot.status === 'completed' ? <SafeIcon icon={FiCheck} /> : idx + 1}
                             </div>
-                            <div>
-                              <div className="text-white font-bold text-sm">{shot.title}</div>
-                              <div className="text-gray-500 text-xs">{shot.shot_type} • <span className="text-blue-400">{shot.shot_angle || 'Eye Level'}</span></div>
+
+                            {/* Shot Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <h4 className="text-lg font-black text-white mb-1">{shot.title}</h4>
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <span className="font-bold">Scene {shot.scene_number}</span>
+                                    <span>•</span>
+                                    <span>{scenes.find(s => s.scene_number === shot.scene_number)?.title}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleShotToggle(shot.id, shot.status)}
+                                  className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${
+                                    shot.status === 'completed'
+                                      ? 'bg-green-500 text-white shadow-lg shadow-green-500/20'
+                                      : 'bg-white/10 text-gray-300 hover:bg-purple-500 hover:text-white border border-white/10'
+                                  }`}
+                                >
+                                  {shot.status === 'completed' ? 'Captured' : 'Mark Done'}
+                                </button>
+                              </div>
+
+                              {shot.description && (
+                                <p className="text-sm text-gray-400 mb-3 italic border-l-2 border-white/10 pl-3">
+                                  "{shot.description.substring(0, 120)}..."
+                                </p>
+                              )}
+
+                              <div className="flex flex-wrap gap-2">
+                                <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase text-gray-400">
+                                  {shot.shot_type}
+                                </span>
+                                <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] font-black uppercase text-blue-400">
+                                  {shot.lens}
+                                </span>
+                                <span className="px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-lg text-[10px] font-black uppercase text-purple-400">
+                                  {shot.shot_angle}
+                                </span>
+                              </div>
+
+                              {shot.notes && (
+                                <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                                  <p className="text-xs text-yellow-200 font-medium">
+                                    <strong>Director's Note:</strong> {shot.notes}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <button 
-                            onClick={() => handleShotToggle(shot.id, shot.status)}
-                            className={`p-2 rounded-lg transition-all ${shot.status === 'completed' ? 'bg-green-500 text-white' : 'bg-white/10 text-gray-400'}`}
-                          >
-                            <SafeIcon icon={FiCheck} />
-                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </motion.div>
+                      </motion.div>
+                    ))}
+                  </div>
                 )}
-              </AnimatePresence>
+              </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
+        {/* Navigation */}
         <div className="mt-12 flex items-center justify-between pt-8 border-t border-white/10">
-          <button onClick={() => navigate(`/planning/${projectId}`)} className="flex items-center space-x-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold">
+          <button 
+            onClick={() => navigate(`/planning/${projectId}`)} 
+            className="flex items-center space-x-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold border border-white/10 transition-all"
+          >
             <SafeIcon icon={FiArrowLeft} />
             <span>Back to Planning</span>
           </button>
           
           <button 
-            onClick={handleCompleteProject}
-            disabled={completing}
-            className="flex items-center space-x-3 px-10 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold transition-all shadow-xl shadow-green-500/20"
+            onClick={() => {
+              if (confirm('Mark production as complete? This will archive the project.')) {
+                navigate('/');
+              }
+            }}
+            className="flex items-center space-x-3 px-10 py-5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-[1.5rem] font-bold transition-all shadow-xl shadow-green-500/20 hover:scale-105"
           >
-            {completing ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white" />
-            ) : (
-              <>
-                <SafeIcon icon={FiCheckCircle} />
-                <span>Complete Production</span>
-              </>
-            )}
+            <SafeIcon icon={FiCheckCircle} />
+            <span>Wrap Production</span>
           </button>
         </div>
       </div>
+      
       <ProjectChat projectId={projectId} isOpen={showChat} onClose={() => setShowChat(false)} />
     </div>
   );
