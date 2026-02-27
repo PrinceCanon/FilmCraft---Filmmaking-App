@@ -4,22 +4,27 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiEdit, FiClock, FiPlay, FiCheck, FiLayers, FiVideo, FiArrowRight } = FiIcons;
+const { FiEdit, FiClock, FiPlay, FiCheck, FiLayers, FiVideo, FiArrowRight, FiFilm } = FiIcons;
 
 const ProjectCard = ({ project, index }) => {
   const navigate = useNavigate();
 
   const getPhaseConfig = (phase) => {
     switch (phase) {
-      case 'ideation': return { icon: FiEdit, color: 'bg-blue-500/20 text-blue-400', label: 'Idea' };
-      case 'planning': return { icon: FiLayers, color: 'bg-purple-500/20 text-purple-400', label: 'Planning' };
-      case 'shooting': return { icon: FiVideo, color: 'bg-red-500/20 text-red-400', label: 'Shooting' };
-      case 'completed': return { icon: FiCheck, color: 'bg-green-500/20 text-green-400', label: 'Done' };
-      default: return { icon: FiClock, color: 'bg-gray-500/20 text-gray-400', label: 'Draft' };
+      case 'ideation': return { icon: FiEdit, color: 'bg-blue-500/20 text-blue-400', label: 'Ideation', route: 'ideation' };
+      case 'planning': return { icon: FiLayers, color: 'bg-purple-500/20 text-purple-400', label: 'Planning', route: 'planning' };
+      case 'shooting': return { icon: FiVideo, color: 'bg-red-500/20 text-red-400', label: 'Shooting', route: 'shooting' };
+      case 'post-production': return { icon: FiFilm, color: 'bg-pink-500/20 text-pink-400', label: 'Post-Production', route: 'post-production' };
+      case 'completed': return { icon: FiCheck, color: 'bg-green-500/20 text-green-400', label: 'Completed', route: 'post-production' };
+      default: return { icon: FiClock, color: 'bg-gray-500/20 text-gray-400', label: 'Draft', route: 'ideation' };
     }
   };
 
   const config = getPhaseConfig(project.phase);
+
+  const handleClick = () => {
+    navigate(`/${config.route}/${project.id}`);
+  };
 
   return (
     <motion.div
@@ -27,11 +32,11 @@ const ProjectCard = ({ project, index }) => {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.05 }}
       whileHover={{ y: -5 }}
-      onClick={() => navigate(`/project/${project.id}`)}
+      onClick={handleClick}
       className="group bg-white/5 border border-white/10 rounded-2xl p-6 cursor-pointer hover:bg-white/10 transition-all backdrop-blur-sm relative overflow-hidden"
     >
       {/* Accent Background */}
-      <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full blur-3xl opacity-10 ${config.color.split(' ')[1]}`} />
+      <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full blur-3xl opacity-10 ${config.color.split(' ')[0]}`} />
 
       <div className="flex items-start justify-between mb-6">
         <div className={`p-3 rounded-xl ${config.color}`}>

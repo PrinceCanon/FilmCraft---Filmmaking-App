@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiLightbulb, FiLayers, FiVideo, FiCheck, FiChevronRight, FiHome } = FiIcons;
+const { FiLightbulb, FiLayers, FiVideo, FiFilm, FiChevronRight, FiHome } = FiIcons;
 
 const ProjectBreadcrumb = ({ project, currentPhase, className = '' }) => {
   const navigate = useNavigate();
@@ -12,29 +12,29 @@ const ProjectBreadcrumb = ({ project, currentPhase, className = '' }) => {
   const phases = [
     { id: 'ideation', title: 'Ideation', icon: FiLightbulb, path: `/ideation/${project.id}`, color: 'text-blue-400' },
     { id: 'planning', title: 'Planning', icon: FiLayers, path: `/planning/${project.id}`, color: 'text-purple-400' },
-    { id: 'shooting', title: 'Shooting', icon: FiVideo, path: `/shooting/${project.id}`, color: 'text-red-400' }
+    { id: 'shooting', title: 'Shooting', icon: FiVideo, path: `/shooting/${project.id}`, color: 'text-red-400' },
+    { id: 'post-production', title: 'Post-Production', icon: FiFilm, path: `/post-production/${project.id}`, color: 'text-pink-400' }
   ];
 
   const handlePhaseClick = (phase) => {
-    // Always accessible in this flexible workflow update
     navigate(phase.path);
   };
 
   return (
     <div className={`bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10 ${className}`}>
-      <div className="flex items-center space-x-2 text-sm">
+      <div className="flex items-center space-x-2 text-sm overflow-x-auto">
         <motion.button 
           whileHover={{ scale: 1.05 }}
           onClick={() => navigate('/')}
-          className="flex items-center space-x-1 text-gray-400 hover:text-white transition-colors"
+          className="flex items-center space-x-1 text-gray-400 hover:text-white transition-colors flex-shrink-0"
         >
           <SafeIcon icon={FiHome} />
           <span className="hidden md:inline">Dashboard</span>
         </motion.button>
         
-        <SafeIcon icon={FiChevronRight} className="text-gray-600" />
+        <SafeIcon icon={FiChevronRight} className="text-gray-600 flex-shrink-0" />
         
-        <div className="flex items-center bg-white/5 rounded-xl px-1 py-1">
+        <div className="flex items-center bg-white/5 rounded-xl px-1 py-1 gap-1">
           {phases.map((phase, idx) => {
             const isCurrent = phase.id === currentPhase;
             return (
@@ -43,17 +43,17 @@ const ProjectBreadcrumb = ({ project, currentPhase, className = '' }) => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => handlePhaseClick(phase)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all flex-shrink-0 ${
                     isCurrent 
                       ? 'bg-white/10 text-white font-bold' 
                       : `${phase.color} hover:bg-white/5`
                   }`}
                 >
                   <SafeIcon icon={phase.icon} />
-                  <span className="hidden sm:inline">{phase.title}</span>
+                  <span className="hidden sm:inline text-xs lg:text-sm">{phase.title}</span>
                 </motion.button>
                 {idx < phases.length - 1 && (
-                  <div className="w-4 h-px bg-white/10 mx-1" />
+                  <div className="w-3 h-px bg-white/10" />
                 )}
               </React.Fragment>
             );

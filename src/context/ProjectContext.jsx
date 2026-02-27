@@ -38,7 +38,7 @@ export const ProjectProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from('projects_fc2024')
-        .insert([{ ...projectData, phase: 'planning', owner_id: user.id }])
+        .insert([{ ...projectData, phase: 'ideation', owner_id: user.id }])
         .select()
         .single();
       if (error) throw error;
@@ -59,7 +59,13 @@ export const ProjectProvider = ({ children }) => {
         .select()
         .single();
       if (error) throw error;
+      
+      // Update local state immediately
       setProjects(prev => prev.map(p => p.id === projectId ? data : p));
+      
+      // Also reload to ensure consistency
+      await loadProjects();
+      
       return data;
     } catch (error) {
       console.error('Error updating project:', error);

@@ -7,7 +7,7 @@ import ProjectBreadcrumb from '../components/ProjectBreadcrumb';
 import SafeIcon from '../common/SafeIcon';
 import * as FiIcons from 'react-icons/fi';
 
-const { FiArrowRight, FiArrowLeft, FiFileText, FiCamera, FiCalendar, FiUsers, FiLayers, FiSkipForward, FiLayout } = FiIcons;
+const { FiArrowRight, FiArrowLeft, FiFileText, FiCamera, FiCalendar, FiUsers, FiSkipForward } = FiIcons;
 
 const Planning = () => {
   const { projectId } = useParams();
@@ -32,8 +32,8 @@ const Planning = () => {
   const steps = [
     { id: 'script', title: 'Script Editor', icon: FiFileText, description: 'Write your professional screenplay' },
     { id: 'shots', title: 'Shot List', icon: FiCamera, description: 'Plan your camera movements and angles' },
-    { id: 'schedule', title: 'Schedule', icon: FiCalendar, description: 'Organize your production days' },
-    { id: 'resources', title: 'Resources', icon: FiUsers, description: 'Crew and equipment management' }
+    { id: 'resources', title: 'Resources', icon: FiUsers, description: 'Cast, crew and equipment' },
+    { id: 'schedule', title: 'Schedule', icon: FiCalendar, description: 'Organize your production days' }
   ];
 
   const handleDataUpdate = (data) => {
